@@ -24,6 +24,16 @@ class DatabaseHelper {
     return join(dir.path, 'dabirkhane.sqlite');
   }
 
+static Future<List<String>> getDistinctFieldValues(String field) async {
+  final db = await database;
+  final List<Map<String, dynamic>> results = await db.rawQuery(
+    'SELECT DISTINCT $field FROM daftare_andicator WHERE $field IS NOT NULL AND $field != ""'
+  );
+  return results.map((e) => e[field].toString()).toList();
+}
+
+
+
   static Future<Database> initDb() async {
     String path = await _dbPath();
 
@@ -32,7 +42,7 @@ class DatabaseHelper {
       version: 1,
       onCreate: (db, version) async {
         await db.execute('''
-        CREATE TABLE daftare_andicator (
+        CREATE TABLE IF NOT EXISTS daftare_andicator (
           Shomare_Radif INTEGER PRIMARY KEY AUTOINCREMENT,
           goshashte TEXT,
           date TEXT,
@@ -52,6 +62,45 @@ class DatabaseHelper {
       },
     );
   }
+
+  static Future<String> getDbPath() async {
+  Directory dir;
+
+  if (Platform.isAndroid) {
+    dir = (await getExternalStorageDirectory())!;
+  } else {
+    dir = await getApplicationDocumentsDirectory();
+  }
+
+  return join(dir.path, 'dabirkhane.sqlite');
+}
+
+static Future<List<Map<String, dynamic>>> getPaged({
+  required int limit,
+  required int offset,
+  String? search,
+}) async {
+  final db = await database;
+
+  String where = '';
+  List<Object?> args = [];
+
+  if (search != null && search.isNotEmpty) {
+    where = '''
+      WHERE guy LIKE ? 
+         OR saheb_name LIKE ?
+         OR Shomare_Radif LIKE ?
+    ''';
+    args = ['%$search%', '%$search%', '%$search%'];
+  }
+
+  return await db.rawQuery('''
+    SELECT * FROM daftare_andicator
+    $where
+    ORDER BY Shomare_Radif DESC
+    LIMIT ? OFFSET ?
+  ''', [...args, limit, offset]);
+}
 
   // CRUD
   static Future<int> insert(Map<String, dynamic> data) async {
