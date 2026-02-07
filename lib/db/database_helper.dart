@@ -31,6 +31,75 @@ static Future<List<String>> getDistinctFieldValues(String field) async {
   );
   return results.map((e) => e[field].toString()).toList();
 }
+static Future<List<String>> searchDistinctField(
+  String field,
+  String query,
+) async {
+  final db = await database;
+
+  final result = await db.rawQuery(
+    '''
+    SELECT DISTINCT $field 
+    FROM daftare_andicator
+    WHERE $field IS NOT NULL 
+      AND $field != ''
+      AND $field LIKE ?
+    ORDER BY Shomare_Radif DESC
+    LIMIT 5
+    ''',
+    ['%$query%'],
+  );
+
+  return result
+      .map((e) => e[field]?.toString() ?? '')
+      .where((e) => e.isNotEmpty)
+      .toList();
+}
+
+
+static Future<List<String>> searchSahebName(String query) async {
+  final db = await database;
+
+  if (query.trim().isEmpty) return [];
+
+  final res = await db.rawQuery(
+    '''
+    SELECT DISTINCT saheb_name
+    FROM daftare_andicator
+    WHERE saheb_name LIKE ?
+    ORDER BY Shomare_Radif DESC
+    LIMIT 5
+    ''',
+    ['%$query%'],
+  );
+
+  return res
+      .map((e) => e['saheb_name']?.toString())
+      .where((e) => e != null && e!.isNotEmpty)
+      .cast<String>()
+      .toList();
+}
+
+static Future<Map<String, dynamic>?> getLastRecordBySahebName(String name) async {
+  final db = await database;
+
+  final res = await db.rawQuery(
+    '''
+    SELECT *
+    FROM daftare_andicator
+    WHERE saheb_name = ?
+    ORDER BY Shomare_Radif DESC
+    LIMIT 1
+    ''',
+    [name],
+  );
+
+  if (res.isNotEmpty) {
+    return res.first;
+  }
+  return null;
+}
+
 
 
 

@@ -38,6 +38,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   sqlite3: ^3.0.0
   sqflite_common_ffi: ^2.4.0
+  shamsi_date: ^1.0.2
 
 dev_dependencies:
   flutter_test:
