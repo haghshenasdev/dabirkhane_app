@@ -24,21 +24,22 @@ class DatabaseHelper {
     return join(dir.path, 'dabirkhane.sqlite');
   }
 
-static Future<List<String>> getDistinctFieldValues(String field) async {
-  final db = await database;
-  final List<Map<String, dynamic>> results = await db.rawQuery(
-    'SELECT DISTINCT $field FROM daftare_andicator WHERE $field IS NOT NULL AND $field != ""'
-  );
-  return results.map((e) => e[field].toString()).toList();
-}
-static Future<List<String>> searchDistinctField(
-  String field,
-  String query,
-) async {
-  final db = await database;
+  static Future<List<String>> getDistinctFieldValues(String field) async {
+    final db = await database;
+    final List<Map<String, dynamic>> results = await db.rawQuery(
+      'SELECT DISTINCT $field FROM daftare_andicator WHERE $field IS NOT NULL AND $field != ""',
+    );
+    return results.map((e) => e[field].toString()).toList();
+  }
 
-  final result = await db.rawQuery(
-    '''
+  static Future<List<String>> searchDistinctField(
+    String field,
+    String query,
+  ) async {
+    final db = await database;
+
+    final result = await db.rawQuery(
+      '''
     SELECT DISTINCT $field 
     FROM daftare_andicator
     WHERE $field IS NOT NULL 
@@ -47,61 +48,59 @@ static Future<List<String>> searchDistinctField(
     ORDER BY Shomare_Radif DESC
     LIMIT 5
     ''',
-    ['%$query%'],
-  );
+      ['%$query%'],
+    );
 
-  return result
-      .map((e) => e[field]?.toString() ?? '')
-      .where((e) => e.isNotEmpty)
-      .toList();
-}
+    return result
+        .map((e) => e[field]?.toString() ?? '')
+        .where((e) => e.isNotEmpty)
+        .toList();
+  }
 
+  static Future<List<String>> searchSahebName(String query) async {
+    final db = await database;
 
-static Future<List<String>> searchSahebName(String query) async {
-  final db = await database;
+    if (query.trim().isEmpty) return [];
 
-  if (query.trim().isEmpty) return [];
-
-  final res = await db.rawQuery(
-    '''
+    final res = await db.rawQuery(
+      '''
     SELECT DISTINCT saheb_name
     FROM daftare_andicator
     WHERE saheb_name LIKE ?
     ORDER BY Shomare_Radif DESC
     LIMIT 5
     ''',
-    ['%$query%'],
-  );
+      ['%$query%'],
+    );
 
-  return res
-      .map((e) => e['saheb_name']?.toString())
-      .where((e) => e != null && e!.isNotEmpty)
-      .cast<String>()
-      .toList();
-}
+    return res
+        .map((e) => e['saheb_name']?.toString())
+        .where((e) => e != null && e!.isNotEmpty)
+        .cast<String>()
+        .toList();
+  }
 
-static Future<Map<String, dynamic>?> getLastRecordBySahebName(String name) async {
-  final db = await database;
+  static Future<Map<String, dynamic>?> getLastRecordBySahebName(
+    String name,
+  ) async {
+    final db = await database;
 
-  final res = await db.rawQuery(
-    '''
+    final res = await db.rawQuery(
+      '''
     SELECT *
     FROM daftare_andicator
     WHERE saheb_name = ?
     ORDER BY Shomare_Radif DESC
     LIMIT 1
     ''',
-    [name],
-  );
+      [name],
+    );
 
-  if (res.isNotEmpty) {
-    return res.first;
+    if (res.isNotEmpty) {
+      return res.first;
+    }
+    return null;
   }
-  return null;
-}
-
-
-
 
   static Future<Database> initDb() async {
     String path = await _dbPath();
@@ -133,43 +132,46 @@ static Future<Map<String, dynamic>?> getLastRecordBySahebName(String name) async
   }
 
   static Future<String> getDbPath() async {
-  Directory dir;
+    Directory dir;
 
-  if (Platform.isAndroid) {
-    dir = (await getExternalStorageDirectory())!;
-  } else {
-    dir = await getApplicationDocumentsDirectory();
+    if (Platform.isAndroid) {
+      dir = (await getExternalStorageDirectory())!;
+    } else {
+      dir = await getApplicationDocumentsDirectory();
+    }
+
+    return join(dir.path, 'dabirkhane.sqlite');
   }
 
-  return join(dir.path, 'dabirkhane.sqlite');
-}
+  static Future<List<Map<String, dynamic>>> getPaged({
+    required int limit,
+    required int offset,
+    String? search,
+  }) async {
+    final db = await database;
 
-static Future<List<Map<String, dynamic>>> getPaged({
-  required int limit,
-  required int offset,
-  String? search,
-}) async {
-  final db = await database;
+    String where = '';
+    List<Object?> args = [];
 
-  String where = '';
-  List<Object?> args = [];
-
-  if (search != null && search.isNotEmpty) {
-    where = '''
+    if (search != null && search.isNotEmpty) {
+      where = '''
       WHERE guy LIKE ? 
          OR saheb_name LIKE ?
          OR Shomare_Radif LIKE ?
     ''';
-    args = ['%$search%', '%$search%', '%$search%'];
-  }
+      args = ['%$search%', '%$search%', '%$search%'];
+    }
 
-  return await db.rawQuery('''
+    return await db.rawQuery(
+      '''
     SELECT * FROM daftare_andicator
     $where
     ORDER BY Shomare_Radif DESC
     LIMIT ? OFFSET ?
-  ''', [...args, limit, offset]);
-}
+  ''',
+      [...args, limit, offset],
+    );
+  }
 
   // CRUD
   static Future<int> insert(Map<String, dynamic> data) async {
@@ -179,8 +181,12 @@ static Future<List<Map<String, dynamic>>> getPaged({
 
   static Future<int> update(int id, Map<String, dynamic> data) async {
     final db = await database;
-    return db.update('daftare_andicator', data,
-        where: 'Shomare_Radif = ?', whereArgs: [id]);
+    return db.update(
+      'daftare_andicator',
+      data,
+      where: 'Shomare_Radif = ?',
+      whereArgs: [id],
+    );
   }
 
   static Future<List<Map<String, dynamic>>> getAll() async {
@@ -188,11 +194,22 @@ static Future<List<Map<String, dynamic>>> getPaged({
     return db.query('daftare_andicator', orderBy: 'Shomare_Radif DESC');
   }
 
-  static Future<void> closeDb() async {
-  if (_db != null) {
-    await _db!.close();
-    _db = null;
+  // متد گرفتن آخرین Shomare_Radif
+  static Future<int?> getLastShomareRadif() async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT MAX(Shomare_Radif) as maxRadif FROM daftare_andicator',
+    );
+    if (result.isNotEmpty) {
+      return result.first['maxRadif'] as int?;
+    }
+    return null;
   }
-}
 
+  static Future<void> closeDb() async {
+    if (_db != null) {
+      await _db!.close();
+      _db = null;
+    }
+  }
 }

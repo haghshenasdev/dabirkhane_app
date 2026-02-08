@@ -25,6 +25,7 @@ class _RecordFormState extends State<RecordForm> {
   final Map<String, FocusNode> focusNodes = {};
 
   final mainFields = [
+    'Shomare_Radif',
     'guy',
     'saheb_name',
     'date',
@@ -44,6 +45,7 @@ class _RecordFormState extends State<RecordForm> {
   ];
 
   final Map<String, String> fieldLabels = {
+    'Shomare_Radif': 'شماره ثبت',
     'goshashte': 'شماره بعدی',
     'date': 'تاریخ',
     'saheb_name': 'صاحب نامه',
@@ -66,7 +68,7 @@ class _RecordFormState extends State<RecordForm> {
   void initState() {
     super.initState();
     for (var f in [...mainFields, ...otherFields]) {
-      c[f] = TextEditingController(text: widget.record?[f] ?? '');
+      c[f] = TextEditingController(text: widget.record?[f]?.toString() ?? '');
       focusNodes[f] = FocusNode();
     }
 
@@ -75,8 +77,16 @@ class _RecordFormState extends State<RecordForm> {
       final now = Jalali.now();
       c['date']!.text =
           '${now.year}/${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}';
+
+      _setDefaultShomareRadif();
     }
   }
+
+  Future<void> _setDefaultShomareRadif() async {
+  final lastNumber = await DatabaseHelper.getLastShomareRadif(); // فرض می‌کنیم این متد رو داری
+  final nextNumber = (lastNumber ?? 0) + 1;
+  c['Shomare_Radif']!.text = nextNumber.toString();
+}
 
   @override
   void dispose() {
@@ -284,7 +294,7 @@ class _RecordFormState extends State<RecordForm> {
                       lastRecord = last;
 
                       lastInfoText =
-                          'آخرین نامه: ${last['date'] ?? '—'} | ${last['onvan'] ?? '—'}';
+                          'آخرین نامه: ${last['date'] ?? '—'} | ${last['guy'] ?? '—'} | ${last['onvan'] ?? '—'}';
                     } else {
                       lastRecord = null;
                       lastInfoText = null;

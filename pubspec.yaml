@@ -39,6 +39,9 @@ dependencies:
   sqlite3: ^3.0.0
   sqflite_common_ffi: ^2.4.0
   shamsi_date: ^1.0.2
+  flutter_doc_scanner: ^0.0.17
+  permission_handler: ^10.4.0
+  open_file: ^3.2.1
 
 dev_dependencies:
   flutter_test:
