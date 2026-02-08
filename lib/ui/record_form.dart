@@ -1,9 +1,14 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:dabirkhane_app/utils/JalaliDateFormatter.dart';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:open_file/open_file.dart';
+import 'package:path_provider/path_provider.dart';
 import '../db/database_helper.dart';
 import 'package:shamsi_date/shamsi_date.dart';
+import 'package:path/path.dart' as path;
 
 class RecordForm extends StatefulWidget {
   final Map<String, dynamic>? record;
@@ -13,7 +18,8 @@ class RecordForm extends StatefulWidget {
   State<RecordForm> createState() => _RecordFormState();
 }
 
-class _RecordFormState extends State<RecordForm> {
+class _RecordFormState extends State<RecordForm>
+    with SingleTickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final Map<String, TextEditingController> c = {};
   Map<String, dynamic>? lastRecord;
@@ -23,6 +29,10 @@ class _RecordFormState extends State<RecordForm> {
   Timer? _debounceGuy;
   Timer? _debounceOnvan;
   final Map<String, FocusNode> focusNodes = {};
+  List<File> filesInDirectory = [];
+  late TabController _tabController;
+  List<String> sahebSuggestions = [];
+  Timer? _debounce;
 
   final mainFields = [
     'Shomare_Radif',
@@ -61,44 +71,46 @@ class _RecordFormState extends State<RecordForm> {
     'adres_name': 'آدرس',
   };
 
-  List<String> sahebSuggestions = [];
-  Timer? _debounce;
-
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+
     for (var f in [...mainFields, ...otherFields]) {
       c[f] = TextEditingController(text: widget.record?[f]?.toString() ?? '');
       focusNodes[f] = FocusNode();
     }
 
-    // تاریخ پیش‌فرض شمسی امروز
     if (widget.record == null) {
       final now = Jalali.now();
       c['date']!.text =
           '${now.year}/${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}';
-
       _setDefaultShomareRadif();
+    } else {
+      _loadFiles(); // بارگذاری فایل‌ها
     }
   }
 
   Future<void> _setDefaultShomareRadif() async {
-  final lastNumber = await DatabaseHelper.getLastShomareRadif(); // فرض می‌کنیم این متد رو داری
-  final nextNumber = (lastNumber ?? 0) + 1;
-  c['Shomare_Radif']!.text = nextNumber.toString();
-}
+    final lastNumber = await DatabaseHelper.getLastShomareRadif();
+    final nextNumber = (lastNumber ?? 0) + 1;
+    c['Shomare_Radif']!.text = nextNumber.toString();
+  }
 
-  @override
-  void dispose() {
-    _debounce?.cancel();
-    for (var controller in c.values) {
-      controller.dispose();
+  // بارگذاری فایل‌ها از پوشه 'letters'
+  Future<void> _loadFiles() async {
+    final shomareRadif = c['Shomare_Radif']!.text; // گرفتن Shomare_Radif
+    final lettersDir = await getLettersDirectory();
+    if (await lettersDir.exists()) {
+      final files = lettersDir.listSync();
+      setState(() {
+        filesInDirectory = files.whereType<File>().where((f) {
+        final name = path.basenameWithoutExtension(f.path);
+        final regex = RegExp('^$shomareRadif(\\D.*)?\$');
+        return regex.hasMatch(name);
+      }).toList();
+      });
     }
-    for (var node in focusNodes.values) {
-      node.dispose();
-    }
-
-    super.dispose();
   }
 
   Future<void> save() async {
@@ -117,7 +129,89 @@ class _RecordFormState extends State<RecordForm> {
     Navigator.pop(context, true);
   }
 
-  Widget buildGuyField() {
+  Future<Directory> getLettersDirectory() async {
+    final appDocDir = await getApplicationDocumentsDirectory();
+    final lettersDir = Directory('${appDocDir.path}/letters');
+    if (!await lettersDir.exists()) {
+      await lettersDir.create();
+    }
+    return lettersDir;
+  }
+
+  // تابع برای باز کردن فایل
+  Future<void> openFile(File file) async {
+    // برای باز کردن فایل با استفاده از اپلیکیشن‌های پیش‌فرض دستگاه
+    final result = await OpenFile.open(file.path);
+
+    if (result.type != ResultType.done) {
+      // اگر باز کردن فایل با خطا مواجه شد، می‌توانید این پیام را نمایش دهید
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('خطا در باز کردن فایل')));
+    }
+  }
+
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    _debounceGuy?.cancel();
+    _debounceOnvan?.cancel();
+
+    for (var controller in c.values) {
+      controller.dispose();
+    }
+    for (var node in focusNodes.values) {
+      node.dispose();
+    }
+
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> addFileForRecord() async {
+    final shomareRadif = c['Shomare_Radif']?.text.trim();
+    if (shomareRadif == null || shomareRadif.isEmpty) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('شماره ثبت مشخص نیست')));
+      return;
+    }
+
+    // انتخاب فایل
+    final result = await FilePicker.platform.pickFiles();
+    if (result == null || result.files.single.path == null) return;
+
+    final pickedFile = File(result.files.single.path!);
+    final ext = path.extension(pickedFile.path);
+
+    final lettersDir = await getLettersDirectory();
+    if (!await lettersDir.exists()) {
+      await lettersDir.create(recursive: true);
+    }
+
+    // پیدا کردن نام مناسب فایل
+    String targetName = '$shomareRadif$ext';
+    File targetFile = File(path.join(lettersDir.path, targetName));
+
+    int index = 1;
+    while (await targetFile.exists()) {
+      targetName = '${shomareRadif}_$index$ext';
+      targetFile = File(path.join(lettersDir.path, targetName));
+      index++;
+    }
+
+    // کپی فایل
+    await pickedFile.copy(targetFile.path);
+
+    // رفرش لیست فایل‌ها
+    await _loadFiles();
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('فایل اضافه شد')));
+  }
+
+Widget buildGuyField() {
     return buildSimpleAutoCompleteField(
       field: 'guy',
       label: 'موضوع',
@@ -406,30 +500,78 @@ class _RecordFormState extends State<RecordForm> {
     );
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.record == null ? 'ثبت نامه' : 'ویرایش نامه'),
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: EdgeInsets.all(12),
-          children: [
-            ...mainFields.map(buildTextField),
-
-            ExpansionTile(
-              title: Text('سایر اطلاعات'),
-              children: otherFields.map(buildTextField).toList(),
-            ),
-
-            const SizedBox(height: 20),
-
-            ElevatedButton(onPressed: save, child: Text('ذخیره')),
+        bottom: TabBar(
+          controller: _tabController,
+          tabs: [
+            Tab(text: "اطلاعات فرم"),
+            Tab(text: "فایل‌ها"),
           ],
         ),
       ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          // تب اول: اطلاعات فرم
+          Form(
+            key: _formKey,
+            child: ListView(
+              padding: EdgeInsets.all(12),
+              children: [
+                ...mainFields.map((field) => buildTextField(field)),
+                ExpansionTile(
+                  title: Text('سایر اطلاعات'),
+                  children: otherFields.map(buildTextField).toList(),
+                ),
+                ElevatedButton(onPressed: save, child: Text('ذخیره')),
+              ],
+            ),
+          ),
+          // تب دوم: لیست فایل‌ها
+          Column(
+            children: [
+              // دکمه‌ها برای افزودن فایل و اسکن فایل
+              Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  children: [
+                    ElevatedButton.icon(
+                      icon: Icon(Icons.attach_file),
+                      label: Text('افزودن فایل'),
+                      onPressed: addFileForRecord,
+                    ),
+                    SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      icon: Icon(Icons.camera_alt),
+                      label: Text('اسکن فایل'),
+                      onPressed: addFileForRecord,
+                    ),
+                  ],
+                ),
+              ),
+              // نمایش لیست فایل‌ها
+              Expanded(
+                child: ListView.builder(
+                  itemCount: filesInDirectory.length,
+                  itemBuilder: (context, index) {
+                    final file = filesInDirectory[index];
+                    return ListTile(
+                      title: Text(path.basename(file.path)),
+                      onTap: () => openFile(file),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
+
 }
