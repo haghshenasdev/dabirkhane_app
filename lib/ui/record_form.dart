@@ -39,38 +39,38 @@ class _RecordFormState extends State<RecordForm>
 
   final mainFields = [
     'Shomare_Radif',
-    'guy',
-    'saheb_name',
     'date',
+    'saheb_name',
+    'guy',
     'sh_name_reside',
     'onvan',
-    't_name_ersali',
   ];
 
   final otherFields = [
-    'goshashte',
-    'from_pywa',
-    't_name_reside',
     'comment',
+    't_name_ersali',
     'shomare_badi',
+    't_name_reside',
     'wordmost2',
+    'from_pywa',
     'adres_name',
+    'goshashte',
   ];
 
   final Map<String, String> fieldLabels = {
-    'Shomare_Radif': 'ردیف',
-    'goshashte': 'شماره بعدی',
+    'Shomare_Radif': 'شماره نامه',
+    'goshashte': 'شماره قبلی',
     'date': 'تاریخ',
     'saheb_name': 'صاحب نامه',
     'guy': 'موضوع',
-    'from_pywa': 'پیوست',
+    'from_pywa': 'پیوست نامه',
     'sh_name_reside': 'شماره تماس',
-    't_name_reside': 'تاریخ ورود',
-    'onvan': 'اقدام',
+    't_name_reside': 'تاریخ نامه',
+    'onvan': 'گیرنده نامه',
     'comment': 'توضیحات',
     'shomare_badi': 'شماره بعدی',
-    'wordmost2': 'کلمه مهم ۲',
-    't_name_ersali': 'تاریخ اقدام',
+    'wordmost2': 'پیوست مکاتبه',
+    't_name_ersali': 'تاریخ مکاتبه',
     'adres_name': 'آدرس',
   };
 
@@ -265,7 +265,7 @@ class _RecordFormState extends State<RecordForm>
   Widget buildOnvanField() {
     return buildSimpleAutoCompleteField(
       field: 'onvan',
-      label: 'اقدام',
+      label: 'گیرنده نامه',
       suggestions: onvanSuggestions,
       onChanged: (value) {
         _debounceOnvan?.cancel();
@@ -560,29 +560,30 @@ class _RecordFormState extends State<RecordForm>
               // دکمه‌ها برای افزودن فایل و اسکن فایل
               Padding(
                 padding: const EdgeInsets.all(8.0),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
+                child: Wrap(
+                  alignment: WrapAlignment.center,
+                  spacing: 10,
+                  runSpacing: 10,
                   children: [
                     ElevatedButton.icon(
-                      icon: Icon(Icons.attach_file),
-                      label: Text('افزودن فایل'),
+                      icon: const Icon(Icons.attach_file),
+                      label: const Text('افزودن فایل'),
                       onPressed: addFileForRecord,
                     ),
-                    SizedBox(width: 10),
                     ElevatedButton.icon(
-                      icon: Icon(Icons.camera_alt),
-                      label: Text('اسکن فایل'),
+                      icon: const Icon(Icons.camera_alt),
+                      label: const Text('اسکن فایل'),
                       onPressed: scanDocument,
                     ),
-                    SizedBox(width: 10),
                     ElevatedButton.icon(
-                      icon: Icon(Icons.refresh),
-                      label: Text('بروز رسانی لیست'),
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('بروزرسانی لیست'),
                       onPressed: _loadFiles,
                     ),
                   ],
                 ),
               ),
+
               // نمایش لیست فایل‌ها
               Expanded(
                 child: GridView.builder(

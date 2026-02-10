@@ -1,10 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'package:dabirkhane_app/pages/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../db/database_helper.dart';
 import 'record_form.dart';
+import 'package:file_selector/file_selector.dart';
+import 'package:flutter/foundation.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -24,6 +27,9 @@ class _HomePageState extends State<HomePage> {
   int offset = 0;
 
   Timer? _debounce;
+
+  bool selectionMode = false;
+  Set<int> selectedIndexes = {};
 
   Future<void> loadMore({bool reset = false}) async {
     if (isLoading) return;
@@ -196,38 +202,80 @@ class _HomePageState extends State<HomePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('دبیرخانه'),
-        actions: [
-          IconButton(icon: Icon(Icons.upload_file), onPressed: importDb),
-          IconButton(icon: Icon(Icons.download), onPressed: exportDb),
-          IconButton(
-            icon: Icon(Icons.settings),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => SettingsPage()),
-              );
-            },
-          ),
-        ],
+        title: selectionMode
+            ? Text('${selectedIndexes.length} مورد انتخاب شده')
+            : const Text('دبیرخانه'),
+        leading: selectionMode
+            ? IconButton(
+                icon: const Icon(Icons.close),
+                onPressed: () {
+                  setState(() {
+                    selectionMode = false;
+                    selectedIndexes.clear();
+                  });
+                },
+              )
+            : null,
+        actions: selectionMode
+            ? [
+                IconButton(
+                  icon: const Icon(Icons.select_all),
+                  tooltip: 'انتخاب همه',
+                  onPressed: () {
+                    setState(() {
+                      selectedIndexes = Set.from(
+                        List.generate(records.length, (i) => i),
+                      );
+                    });
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.table_view),
+                  tooltip: 'خروجی اکسل',
+                  onPressed: exportSelectedToCsv,
+                ),
+              ]
+            : [
+                IconButton(
+                  icon: const Icon(Icons.upload_file),
+                  onPressed: importDb,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.download),
+                  onPressed: exportDb,
+                ),
+                IconButton(
+                  icon: const Icon(Icons.settings),
+                  onPressed: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => SettingsPage()),
+                    );
+                  },
+                ),
+              ],
       ),
-      floatingActionButton: FloatingActionButton(
-        child: Icon(Icons.add),
-        onPressed: () async {
-          final r = await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => RecordForm()),
-          );
-          if (r == true) load();
-        },
-      ),
+
+      floatingActionButton: selectionMode
+          ? null
+          : FloatingActionButton(
+              child: const Icon(Icons.add),
+              onPressed: () async {
+                final r = await Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => RecordForm()),
+                );
+                if (r == true) load();
+              },
+            ),
+
       body: Column(
         children: [
           // 🔍 سرچ
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: TextField(
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'جستجو...',
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
@@ -242,230 +290,253 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
 
-          // 📄 لیست
+          // 📄 لیست کارت‌ها
           Expanded(
             child: ListView.builder(
               controller: _scrollController,
               itemCount: records.length + (hasMore ? 1 : 0),
               itemBuilder: (_, i) {
                 if (i >= records.length) {
-                  return Padding(
-                    padding: const EdgeInsets.all(16),
+                  return const Padding(
+                    padding: EdgeInsets.all(16),
                     child: Center(child: CircularProgressIndicator()),
                   );
                 }
 
                 final r = records[i];
+                final isSelected = selectedIndexes.contains(i);
 
                 return Card(
+                  color: isSelected ? Colors.blue.withOpacity(0.15) : null,
                   margin: const EdgeInsets.symmetric(
                     horizontal: 10,
                     vertical: 6,
                   ),
-                  elevation: 2,
+                  elevation: isSelected ? 4 : 2,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
+                    side: isSelected
+                        ? const BorderSide(color: Colors.blue, width: 1.5)
+                        : BorderSide.none,
                   ),
                   child: InkWell(
                     borderRadius: BorderRadius.circular(12),
+
+                    // 👆 کلیک کوتاه
                     onTap: () async {
-                      final res = await Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) => RecordForm(record: r),
-                        ),
-                      );
-                      if (res == true) {
-                        loadMore(reset: true);
+                      if (selectionMode) {
+                        setState(() {
+                          if (isSelected) {
+                            selectedIndexes.remove(i);
+                          } else {
+                            selectedIndexes.add(i);
+                          }
+
+                          if (selectedIndexes.isEmpty) {
+                            selectionMode = false;
+                          }
+                        });
+                      } else {
+                        final res = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => RecordForm(record: r),
+                          ),
+                        );
+                        if (res == true) {
+                          loadMore(reset: true);
+                        }
                       }
                     },
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 14,
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          /// سطر اول واکنش‌گرا: guy و صاحب
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              final isWide = constraints.maxWidth > 400;
-                              if (isWide) {
-                                return Row(
-                                  textDirection: TextDirection.rtl,
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
+
+                    // ✋ کلیک طولانی
+                    onLongPress: () {
+                      setState(() {
+                        selectionMode = true;
+                        selectedIndexes.add(i);
+                      });
+                    },
+
+                    child: Stack(
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              /// سطر اول: guy و صاحب
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final isWide = constraints.maxWidth > 400;
+                                  if (isWide) {
+                                    return Row(
+                                      textDirection: TextDirection.rtl,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
                                       children: [
                                         Text(
                                           r['guy'] ?? '—',
-                                          style: TextStyle(
+                                          style: const TextStyle(
                                             fontSize: 17,
                                             fontWeight: FontWeight.w700,
                                           ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.person_outline,
+                                              size: 16,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              r['saheb_name'] ?? '—',
+                                              style: const TextStyle(
+                                                fontSize: 16,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
-                                    ),
-                                    Row(
+                                    );
+                                  } else {
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
                                       children: [
-                                        Icon(Icons.person_outline, size: 16),
-                                        const SizedBox(width: 6),
                                         Text(
-                                          r['saheb_name'] ?? '—',
-                                          style: TextStyle(
-                                            fontSize: 16,
+                                          r['guy'] ?? '—',
+                                          style: const TextStyle(
+                                            fontSize: 17,
                                             fontWeight: FontWeight.w700,
                                           ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          textDirection: TextDirection.rtl,
                                         ),
-                                      ],
-                                    ),
-                                  ],
-                                );
-                              } else {
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Row(
-                                      textDirection: TextDirection.rtl,
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            r['guy'] ?? '—',
-                                            style: TextStyle(
-                                              fontSize: 17,
-                                              fontWeight: FontWeight.w700,
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.person_outline,
+                                              size: 16,
                                             ),
-                                            // چندخطی در صفحه کوچک:
-                                            // maxLines و overflow حذف شده تا متن چند خطی باشه
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      textDirection: TextDirection.rtl,
-                                      children: [
-                                        Icon(Icons.person_outline, size: 16),
-                                        const SizedBox(width: 6),
-                                        Expanded(
-                                          child: Text(
-                                            r['saheb_name'] ?? '—',
-                                            style: TextStyle(
-                                              fontSize: 16,
-                                              fontWeight: FontWeight.w700,
+                                            const SizedBox(width: 6),
+                                            Expanded(
+                                              child: Text(
+                                                r['saheb_name'] ?? '—',
+                                                style: const TextStyle(
+                                                  fontSize: 16,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
                                             ),
-                                            textDirection: TextDirection.rtl,
-                                            // چندخطی:
-                                            // maxLines و overflow حذف شده
-                                          ),
+                                          ],
                                         ),
                                       ],
-                                    ),
-                                  ],
-                                );
-                              }
-                            },
-                          ),
+                                    );
+                                  }
+                                },
+                              ),
 
-                          const SizedBox(height: 10),
+                              const SizedBox(height: 10),
 
-                          /// سطر دوم واکنش‌گرا: تاریخ و شماره ردیف
-                          LayoutBuilder(
-                            builder: (context, constraints) {
-                              final isWide = constraints.maxWidth > 400;
-                              if (isWide) {
-                                return Row(
-                                  textDirection: TextDirection.rtl,
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Icon(Icons.calendar_today, size: 16),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          r['date'] ?? '—',
-                                          style: TextStyle(fontSize: 14),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.confirmation_number_outlined,
-                                          size: 16,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          'ردیف ${r['Shomare_Radif']}',
-                                          style: TextStyle(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                );
-                              } else {
-                                return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
-                                  children: [
-                                    Row(
+                              /// سطر دوم: تاریخ و ردیف
+                              LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final isWide = constraints.maxWidth > 400;
+                                  if (isWide) {
+                                    return Row(
                                       textDirection: TextDirection.rtl,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Icon(Icons.calendar_today, size: 16),
-                                        const SizedBox(width: 6),
-                                        Expanded(
-                                          child: Text(
-                                            r['date'] ?? '—',
-                                            style: TextStyle(fontSize: 14),
-                                            // چندخطی:
-                                            // maxLines و overflow حذف شده
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Row(
-                                      textDirection: TextDirection.rtl,
-                                      children: [
-                                        Icon(
-                                          Icons.confirmation_number_outlined,
-                                          size: 16,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Expanded(
-                                          child: Text(
-                                            'ردیف ${r['Shomare_Radif']}',
-                                            style: TextStyle(
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.calendar_today,
+                                              size: 16,
                                             ),
-                                            // چندخطی:
-                                            // maxLines و overflow حذف شده
-                                          ),
+                                            const SizedBox(width: 6),
+                                            Text(r['date'] ?? '—'),
+                                          ],
+                                        ),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons
+                                                  .confirmation_number_outlined,
+                                              size: 16,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              'ردیف ${r['Shomare_Radif']}',
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
                                         ),
                                       ],
-                                    ),
-                                  ],
-                                );
-                              }
-                            },
+                                    );
+                                  } else {
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.calendar_today,
+                                              size: 16,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Expanded(
+                                              child: Text(r['date'] ?? '—'),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons
+                                                  .confirmation_number_outlined,
+                                              size: 16,
+                                            ),
+                                            const SizedBox(width: 6),
+                                            Expanded(
+                                              child: Text(
+                                                'ردیف ${r['Shomare_Radif']}',
+                                                style: const TextStyle(
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    );
+                                  }
+                                },
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+
+                        // ✅ آیکن انتخاب
+                        if (selectionMode)
+                          Positioned(
+                            top: 8,
+                            left: 8,
+                            child: Icon(
+                              isSelected
+                                  ? Icons.check_circle
+                                  : Icons.radio_button_unchecked,
+                              color: isSelected ? Colors.blue : Colors.grey,
+                            ),
+                          ),
+                      ],
                     ),
                   ),
                 );
@@ -475,5 +546,63 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+
+  Future<void> exportSelectedToCsv() async {
+    if (selectedIndexes.isEmpty) {
+      debugPrint('❌ هیچ آیتمی انتخاب نشده');
+      return;
+    }
+
+    final selectedRecords = selectedIndexes
+        .where((i) => i >= 0 && i < records.length)
+        .map((i) => records[i])
+        .toList();
+
+    if (selectedRecords.isEmpty) {
+      debugPrint('❌ لیست انتخاب‌شده خالی است');
+      return;
+    }
+
+    // 🟢 ساخت هدرها (امن)
+    final headers = selectedRecords.first.keys
+        .map((e) => e.toString())
+        .toList();
+
+    final StringBuffer csv = StringBuffer();
+
+    csv.write('\uFEFF');
+
+    // 🔹 سطر هدر
+    csv.writeln(headers.join(';'));
+
+    // 🔹 داده‌ها
+    for (final record in selectedRecords) {
+      final row = headers
+          .map((h) {
+            final value = record[h]?.toString() ?? '';
+            final escaped = value.replaceAll('"', '""');
+            return '"$escaped"';
+          })
+          .join(';');
+
+      csv.writeln(row);
+    }
+
+    final fileName = 'export_${DateTime.now().millisecondsSinceEpoch}.csv';
+
+    final path = await getSaveLocation(
+      suggestedName: fileName,
+      acceptedTypeGroups: const [
+        XTypeGroup(label: 'CSV', extensions: ['csv']),
+      ],
+    );
+
+    if (path == null) return;
+
+    final file = File(path.path);
+    await file.writeAsString(csv.toString(), flush: true, encoding: utf8);
+
+    debugPrint('✅ CSV exported: $path.path');
   }
 }

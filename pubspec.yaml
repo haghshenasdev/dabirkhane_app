@@ -45,6 +45,8 @@ dependencies:
   shared_preferences: ^2.2.2
   provider: ^6.1.5+1
   url_launcher: ^6.1.10
+  excel: ^4.0.2
+  file_selector: ^1.0.3
 
 dev_dependencies:
   flutter_test:
