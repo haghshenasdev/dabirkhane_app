@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 import 'package:dabirkhane_app/utils/JalaliDateFormatter.dart';
+import 'package:dabirkhane_app/utils/app_settings.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_doc_scanner/flutter_doc_scanner.dart';
 import 'package:open_file/open_file.dart';
 import 'package:path_provider/path_provider.dart';
 import '../db/database_helper.dart';
@@ -40,8 +43,8 @@ class _RecordFormState extends State<RecordForm>
     'saheb_name',
     'date',
     'sh_name_reside',
-    't_name_ersali',
     'onvan',
+    't_name_ersali',
   ];
 
   final otherFields = [
@@ -55,19 +58,19 @@ class _RecordFormState extends State<RecordForm>
   ];
 
   final Map<String, String> fieldLabels = {
-    'Shomare_Radif': 'شماره ثبت',
+    'Shomare_Radif': 'ردیف',
     'goshashte': 'شماره بعدی',
     'date': 'تاریخ',
     'saheb_name': 'صاحب نامه',
     'guy': 'موضوع',
-    'from_pywa': 'از پیوا',
+    'from_pywa': 'پیوست',
     'sh_name_reside': 'شماره تماس',
-    't_name_reside': 'نام تحویل گیرنده',
-    'onvan': 'نتیجه',
+    't_name_reside': 'تاریخ ورود',
+    'onvan': 'اقدام',
     'comment': 'توضیحات',
     'shomare_badi': 'شماره بعدی',
     'wordmost2': 'کلمه مهم ۲',
-    't_name_ersali': 'نام ارسال کننده',
+    't_name_ersali': 'تاریخ اقدام',
     'adres_name': 'آدرس',
   };
 
@@ -105,10 +108,10 @@ class _RecordFormState extends State<RecordForm>
       final files = lettersDir.listSync();
       setState(() {
         filesInDirectory = files.whereType<File>().where((f) {
-        final name = path.basenameWithoutExtension(f.path);
-        final regex = RegExp('^$shomareRadif(\\D.*)?\$');
-        return regex.hasMatch(name);
-      }).toList();
+          final name = path.basenameWithoutExtension(f.path);
+          final regex = RegExp('^$shomareRadif(\\D.*)?\$');
+          return regex.hasMatch(name);
+        }).toList();
       });
     }
   }
@@ -130,8 +133,7 @@ class _RecordFormState extends State<RecordForm>
   }
 
   Future<Directory> getLettersDirectory() async {
-    final appDocDir = await getApplicationDocumentsDirectory();
-    final lettersDir = Directory('${appDocDir.path}/letters');
+    final lettersDir = await AppSettings.getLettersDirectory();
     if (!await lettersDir.exists()) {
       await lettersDir.create();
     }
@@ -177,41 +179,62 @@ class _RecordFormState extends State<RecordForm>
       return;
     }
 
-    // انتخاب فایل
-    final result = await FilePicker.platform.pickFiles();
-    if (result == null || result.files.single.path == null) return;
-
-    final pickedFile = File(result.files.single.path!);
-    final ext = path.extension(pickedFile.path);
+    // انتخاب چند فایل
+    final result = await FilePicker.platform.pickFiles(allowMultiple: true);
+    if (result == null || result.files.isEmpty) return;
 
     final lettersDir = await getLettersDirectory();
     if (!await lettersDir.exists()) {
       await lettersDir.create(recursive: true);
     }
 
-    // پیدا کردن نام مناسب فایل
-    String targetName = '$shomareRadif$ext';
-    File targetFile = File(path.join(lettersDir.path, targetName));
+    for (final file in result.files) {
+      if (file.path == null) continue;
 
-    int index = 1;
-    while (await targetFile.exists()) {
-      targetName = '${shomareRadif}_$index$ext';
-      targetFile = File(path.join(lettersDir.path, targetName));
-      index++;
+      final pickedFile = File(file.path!);
+      final ext = path.extension(pickedFile.path);
+
+      // پیدا کردن نام مناسب فایل
+      String targetName = '$shomareRadif$ext';
+      File targetFile = File(path.join(lettersDir.path, targetName));
+
+      int index = 1;
+      while (await targetFile.exists()) {
+        targetName = '${shomareRadif}_$index$ext';
+        targetFile = File(path.join(lettersDir.path, targetName));
+        index++;
+      }
+
+      // کپی فایل
+      await pickedFile.copy(targetFile.path);
     }
-
-    // کپی فایل
-    await pickedFile.copy(targetFile.path);
 
     // رفرش لیست فایل‌ها
     await _loadFiles();
 
     ScaffoldMessenger.of(
       context,
-    ).showSnackBar(SnackBar(content: Text('فایل اضافه شد')));
+    ).showSnackBar(SnackBar(content: Text('فایل‌ها با موفقیت اضافه شدند')));
   }
 
-Widget buildGuyField() {
+  Future<void> scanDocument() async {
+    //by default way they fetch pdf for android and png for iOS
+    dynamic scannedDocuments;
+    try {
+      scannedDocuments =
+          await FlutterDocScanner().getScannedDocumentAsPdf(page: 4) ??
+          'Unknown platform documents';
+    } on PlatformException {
+      scannedDocuments = 'دریافت فایل های اسکن شده شکست خورد.';
+    } catch (error) {
+      scannedDocuments = error.toString();
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(scannedDocuments.toString())));
+  }
+
+  Widget buildGuyField() {
     return buildSimpleAutoCompleteField(
       field: 'guy',
       label: 'موضوع',
@@ -242,7 +265,7 @@ Widget buildGuyField() {
   Widget buildOnvanField() {
     return buildSimpleAutoCompleteField(
       field: 'onvan',
-      label: 'نتیجه',
+      label: 'اقدام',
       suggestions: onvanSuggestions,
       onChanged: (value) {
         _debounceOnvan?.cancel();
@@ -500,7 +523,7 @@ Widget buildGuyField() {
     );
   }
 
-    @override
+  @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
@@ -549,20 +572,94 @@ Widget buildGuyField() {
                     ElevatedButton.icon(
                       icon: Icon(Icons.camera_alt),
                       label: Text('اسکن فایل'),
-                      onPressed: addFileForRecord,
+                      onPressed: scanDocument,
+                    ),
+                    SizedBox(width: 10),
+                    ElevatedButton.icon(
+                      icon: Icon(Icons.refresh),
+                      label: Text('بروز رسانی لیست'),
+                      onPressed: _loadFiles,
                     ),
                   ],
                 ),
               ),
               // نمایش لیست فایل‌ها
               Expanded(
-                child: ListView.builder(
+                child: GridView.builder(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 180, // عرض هر کارت
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    // برای اینکه کارت‌ها نسبت طول به عرض مناسب داشته باشند و فضای متن هم جا شود
+                    // مقدار کم‌تر مقدار کارت را بلندتر می‌کند (تماشاگر نسبت 9:16 برای تصویر داخلیش است)
+                    // با مقدار ~0.55 تا 0.6 کارتی بلندتر می‌شود تا تصویر 9:16 بتواند جا بگیرد.
+                    childAspectRatio: 0.55,
+                  ),
                   itemCount: filesInDirectory.length,
                   itemBuilder: (context, index) {
                     final file = filesInDirectory[index];
-                    return ListTile(
-                      title: Text(path.basename(file.path)),
-                      onTap: () => openFile(file),
+                    final isImg = _isImage(file.path);
+                    final fileName = path.basename(file.path);
+
+                    return MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: InkWell(
+                        onTap: () => openFile(file),
+                        borderRadius: BorderRadius.circular(12),
+                        child: Card(
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              // ناحیه تصویر با نسبت عمودی 9:16
+                              Expanded(
+                                child: AspectRatio(
+                                  aspectRatio: 5 / 7,
+                                  child: isImg
+                                      ? Image.file(
+                                          file,
+                                          width: double.infinity,
+                                          height: double.infinity,
+                                          fit:
+                                              BoxFit.contain, // جلوگیری از کراپ
+                                        )
+                                      : Container(
+                                          color: Colors.grey[200],
+                                          child: const Center(
+                                            child: Icon(
+                                              Icons.insert_drive_file,
+                                              size: 40,
+                                              color: Colors.grey,
+                                            ),
+                                          ),
+                                        ),
+                                ),
+                              ),
+                              // متن زیر تصویر
+                              Padding(
+                                padding: const EdgeInsets.all(8.0),
+                                child: Text(
+                                  fileName,
+                                  textAlign: TextAlign.center,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                     );
                   },
                 ),
@@ -574,4 +671,8 @@ Widget buildGuyField() {
     );
   }
 
+  bool _isImage(String filePath) {
+    final ext = path.extension(filePath).toLowerCase();
+    return ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'].contains(ext);
+  }
 }

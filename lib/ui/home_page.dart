@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:dabirkhane_app/pages/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import '../db/database_helper.dart';
@@ -199,6 +200,15 @@ class _HomePageState extends State<HomePage> {
         actions: [
           IconButton(icon: Icon(Icons.upload_file), onPressed: importDb),
           IconButton(icon: Icon(Icons.download), onPressed: exportDb),
+          IconButton(
+            icon: Icon(Icons.settings),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => SettingsPage()),
+              );
+            },
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(

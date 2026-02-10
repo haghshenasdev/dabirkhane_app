@@ -22,5 +22,7 @@
   <string>1.0</string>
   <key>MinimumOSVersion</key>
   <string>13.0</string>
+  <key>NSCameraUsageDescription</key>
+  <string>Camera Permission Description</string>
 </dict>
 </plist>
