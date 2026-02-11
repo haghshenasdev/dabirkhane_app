@@ -36,6 +36,7 @@ class _RecordFormState extends State<RecordForm>
   late TabController _tabController;
   List<String> sahebSuggestions = [];
   Timer? _debounce;
+  final FocusNode _firstFieldFocus = FocusNode();
 
   final mainFields = [
     'Shomare_Radif',
@@ -85,13 +86,17 @@ class _RecordFormState extends State<RecordForm>
     }
 
     if (widget.record == null) {
-      final now = Jalali.now();
-      c['date']!.text =
-          '${now.year}/${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}';
-      _setDefaultShomareRadif();
+      _setInitialValues();
     } else {
       _loadFiles(); // بارگذاری فایل‌ها
     }
+  }
+
+  void _setInitialValues() {
+    final now = Jalali.now();
+    c['date']!.text =
+        '${now.year}/${now.month.toString().padLeft(2, '0')}/${now.day.toString().padLeft(2, '0')}';
+    _setDefaultShomareRadif();
   }
 
   Future<void> _setDefaultShomareRadif() async {
@@ -167,6 +172,7 @@ class _RecordFormState extends State<RecordForm>
     }
 
     _tabController.dispose();
+    _firstFieldFocus.dispose();
     super.dispose();
   }
 
@@ -362,6 +368,7 @@ class _RecordFormState extends State<RecordForm>
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         TextFormField(
+          focusNode: _firstFieldFocus,
           controller: c['saheb_name'],
           decoration: InputDecoration(
             labelText: 'صاحب نامه',
@@ -550,7 +557,23 @@ class _RecordFormState extends State<RecordForm>
                   title: Text('سایر اطلاعات'),
                   children: otherFields.map(buildTextField).toList(),
                 ),
-                ElevatedButton(onPressed: save, child: Text('ذخیره')),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: save,
+                        child: const Text('ذخیره و خروج'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed: saveAndStay,
+                        child: const Text('ذخیره و جدید'),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -675,5 +698,41 @@ class _RecordFormState extends State<RecordForm>
   bool _isImage(String filePath) {
     final ext = path.extension(filePath).toLowerCase();
     return ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'].contains(ext);
+  }
+
+  Future<void> saveAndStay() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    final data = {
+      for (var f in [...mainFields, ...otherFields]) f: c[f]!.text,
+    };
+
+    if (widget.record == null) {
+      await DatabaseHelper.insert(data);
+    } else {
+      await DatabaseHelper.update(widget.record!['Shomare_Radif'], data);
+    }
+
+    // 🔹 تاریخ رکورد فعلی را نگه می‌داریم
+    final String lastDate = c['date']?.text ?? '';
+
+    // پاک کردن فیلدها
+    for (var controller in c.values) {
+      controller.clear();
+    }
+
+    // دوباره ست کردن مقادیر پیشفرض
+    _setInitialValues();
+    // 🔹 برگرداندن تاریخ قبلی
+    c['date']?.text = lastDate;
+
+    // فوکوس برگردد به اولین فیلد
+    Future.delayed(const Duration(milliseconds: 100), () {
+      _firstFieldFocus.requestFocus();
+    });
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('اطلاعات ذخیره شد')));
   }
 }

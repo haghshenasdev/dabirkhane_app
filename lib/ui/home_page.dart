@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:dabirkhane_app/pages/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:provider/provider.dart';
+import 'package:shamsi_date/shamsi_date.dart';
 import '../db/database_helper.dart';
 import 'record_form.dart';
 import 'package:file_selector/file_selector.dart';
@@ -218,9 +220,9 @@ class _HomePageState extends State<HomePage> {
             : null,
         actions: selectionMode
             ? [
-                IconButton(
-                  icon: const Icon(Icons.select_all),
-                  tooltip: 'انتخاب همه',
+                TextButton.icon(
+                  icon: const Icon(Icons.done_all),
+                  label: const Text('انتخاب همه'),
                   onPressed: () {
                     setState(() {
                       selectedIndexes = Set.from(
@@ -229,20 +231,41 @@ class _HomePageState extends State<HomePage> {
                     });
                   },
                 ),
-                IconButton(
-                  icon: const Icon(Icons.table_view),
-                  tooltip: 'خروجی اکسل',
+
+                TextButton.icon(
+                  icon: const Icon(Icons.table_chart_outlined),
+                  label: const Text('خروجی CSV'),
                   onPressed: exportSelectedToCsv,
                 ),
               ]
             : [
                 IconButton(
-                  icon: const Icon(Icons.upload_file),
-                  onPressed: importDb,
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () {
+                    setState(() {
+                      load(); // یا load();
+                    });
+                  },
+                  tooltip: 'تازه سازی',
                 ),
                 IconButton(
-                  icon: const Icon(Icons.download),
+                  icon: const Icon(Icons.bar_chart_rounded),
+                  onPressed: () {
+                    setState(() {
+                      load(); // یا load();
+                    });
+                  },
+                  tooltip: 'آمار',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.arrow_downward_rounded),
+                  onPressed: importDb,
+                  tooltip: 'بازیابی اطلاعات',
+                ),
+                IconButton(
+                  icon: const Icon(Icons.arrow_upward_rounded),
                   onPressed: exportDb,
+                  tooltip: 'پشتیبان گیری از اطلاعات',
                 ),
                 IconButton(
                   icon: const Icon(Icons.settings),
@@ -549,34 +572,22 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> exportSelectedToCsv() async {
-    if (selectedIndexes.isEmpty) {
-      debugPrint('❌ هیچ آیتمی انتخاب نشده');
-      return;
-    }
+    if (selectedIndexes.isEmpty) return;
 
     final selectedRecords = selectedIndexes
         .where((i) => i >= 0 && i < records.length)
         .map((i) => records[i])
         .toList();
 
-    if (selectedRecords.isEmpty) {
-      debugPrint('❌ لیست انتخاب‌شده خالی است');
-      return;
-    }
+    if (selectedRecords.isEmpty) return;
 
-    // 🟢 ساخت هدرها (امن)
     final headers = selectedRecords.first.keys
         .map((e) => e.toString())
         .toList();
 
     final StringBuffer csv = StringBuffer();
+    csv.writeln(headers.join(','));
 
-    csv.write('\uFEFF');
-
-    // 🔹 سطر هدر
-    csv.writeln(headers.join(';'));
-
-    // 🔹 داده‌ها
     for (final record in selectedRecords) {
       final row = headers
           .map((h) {
@@ -584,12 +595,16 @@ class _HomePageState extends State<HomePage> {
             final escaped = value.replaceAll('"', '""');
             return '"$escaped"';
           })
-          .join(';');
+          .join(',');
 
       csv.writeln(row);
     }
 
-    final fileName = 'export_${DateTime.now().millisecondsSinceEpoch}.csv';
+    final now = Jalali.now();
+    final formattedDate =
+        '${now.year}_${now.month.toString().padLeft(2, '0')}_${now.day.toString().padLeft(2, '0')}';
+
+    final fileName = 'خروجی دبیرخانه-$formattedDate.csv';
 
     final path = await getSaveLocation(
       suggestedName: fileName,
@@ -600,9 +615,13 @@ class _HomePageState extends State<HomePage> {
 
     if (path == null) return;
 
-    final file = File(path.path);
-    await file.writeAsString(csv.toString(), flush: true, encoding: utf8);
+    final bytes = const Utf8Encoder().convert(csv.toString());
+    final bom = [0xEF, 0xBB, 0xBF];
+    await File(path.path).writeAsBytes([...bom, ...bytes], flush: true);
 
-    debugPrint('✅ CSV exported: $path.path');
+    debugPrint('✅ CSV فارسی ذخیره شد: $path');
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text('✅ خروجی ذخیره شد: ${path.path}')));
   }
 }
