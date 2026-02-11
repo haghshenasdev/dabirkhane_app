@@ -4,12 +4,10 @@ import 'dart:io';
 import 'package:dabirkhane_app/pages/settings_page.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:provider/provider.dart';
 import 'package:shamsi_date/shamsi_date.dart';
 import '../db/database_helper.dart';
 import 'record_form.dart';
 import 'package:file_selector/file_selector.dart';
-import 'package:flutter/foundation.dart';
 
 class HomePage extends StatefulWidget {
   @override
@@ -33,13 +31,18 @@ class _HomePageState extends State<HomePage> {
   bool selectionMode = false;
   Set<int> selectedIndexes = {};
 
+  bool showAdvancedFilter = false;
+
+  final TextEditingController fromDateController = TextEditingController();
+  final TextEditingController toDateController = TextEditingController();
+
   Future<void> loadMore({bool reset = false}) async {
     if (isLoading) return;
 
     if (reset) {
       offset = 0;
       hasMore = true;
-      records.clear();
+      records = [];
     }
 
     if (!hasMore) return;
@@ -294,22 +297,125 @@ class _HomePageState extends State<HomePage> {
 
       body: Column(
         children: [
-          // 🔍 سرچ
+          // 🔍 سرچ + فیلتر پیشرفته
           Padding(
             padding: const EdgeInsets.all(8.0),
-            child: TextField(
-              decoration: const InputDecoration(
-                labelText: 'جستجو...',
-                prefixIcon: Icon(Icons.search),
-                border: OutlineInputBorder(),
-              ),
-              onChanged: (v) {
-                if (_debounce?.isActive ?? false) _debounce!.cancel();
-                _debounce = Timer(const Duration(milliseconds: 500), () {
-                  query = v;
-                  loadMore(reset: true);
-                });
-              },
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    // 🔎 فیلد جستجو
+                    Expanded(
+                      child: TextField(
+                        decoration: const InputDecoration(
+                          labelText: 'جستجو...',
+                          prefixIcon: Icon(Icons.search),
+                          border: OutlineInputBorder(),
+                        ),
+                        onChanged: (v) {
+                          if (_debounce?.isActive ?? false) _debounce!.cancel();
+                          _debounce = Timer(
+                            const Duration(milliseconds: 500),
+                            () {
+                              query = v;
+                              loadMore(reset: true);
+                            },
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(width: 8),
+
+                    // 🔽 دکمه باز شدن فیلتر
+                    IconButton(
+                      icon: Icon(
+                        showAdvancedFilter
+                            ? Icons.expand_less
+                            : Icons.filter_alt_outlined,
+                      ),
+                      tooltip: 'فیلتر تاریخ',
+                      onPressed: () {
+                        setState(() {
+                          showAdvancedFilter = !showAdvancedFilter;
+                        });
+                      },
+                    ),
+                  ],
+                ),
+
+                // 🟢 فیلتر بازشو
+                AnimatedCrossFade(
+                  firstChild: const SizedBox(),
+                  secondChild: Container(
+                    margin: const EdgeInsets.only(top: 10),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.shade300),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            // از تاریخ
+                            Expanded(
+                              child: TextField(
+                                controller: fromDateController,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'از تاریخ (مثال: 14040101)',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+
+                            // تا تاریخ
+                            Expanded(
+                              child: TextField(
+                                controller: toDateController,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'تا تاریخ (مثال: 14041229)',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 10),
+
+                        Row(
+                          children: [
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.search),
+                              label: const Text('اعمال فیلتر'),
+                              onPressed: () {
+                                loadMore(reset: true);
+                              },
+                            ),
+                            const SizedBox(width: 10),
+                            TextButton(
+                              child: const Text('پاک کردن'),
+                              onPressed: () {
+                                fromDateController.clear();
+                                toDateController.clear();
+                                loadMore(reset: true);
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  crossFadeState: showAdvancedFilter
+                      ? CrossFadeState.showSecond
+                      : CrossFadeState.showFirst,
+                  duration: const Duration(milliseconds: 250),
+                ),
+              ],
             ),
           ),
 

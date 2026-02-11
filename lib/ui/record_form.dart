@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:math';
 import 'package:dabirkhane_app/utils/JalaliDateFormatter.dart';
 import 'package:dabirkhane_app/utils/app_settings.dart';
 import 'package:file_picker/file_picker.dart';
@@ -561,15 +560,15 @@ class _RecordFormState extends State<RecordForm>
                   children: [
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: save,
-                        child: const Text('ذخیره و خروج'),
+                        onPressed: saveAndStay,
+                        child: const Text('ذخیره و جدید'),
                       ),
                     ),
                     const SizedBox(width: 10),
                     Expanded(
                       child: ElevatedButton(
-                        onPressed: saveAndStay,
-                        child: const Text('ذخیره و جدید'),
+                        onPressed: save,
+                        child: const Text('ذخیره و خروج'),
                       ),
                     ),
                   ],

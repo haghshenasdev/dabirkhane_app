@@ -158,8 +158,9 @@ class DatabaseHelper {
       WHERE guy LIKE ? 
          OR saheb_name LIKE ?
          OR Shomare_Radif LIKE ?
+         OR sh_name_reside LIKE ?
     ''';
-      args = ['%$search%', '%$search%', '%$search%'];
+      args = ['%$search%', '%$search%', '%$search%', '%$search%'];
     }
 
     return await db.rawQuery(
