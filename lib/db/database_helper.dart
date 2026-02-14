@@ -125,7 +125,20 @@ class DatabaseHelper {
           wordmost2 TEXT,
           t_name_ersali TEXT,
           adres_name TEXT
-        )
+        );
+        CREATE TABLE IF NOT EXISTS categories (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT UNIQUE NOT NULL
+);
+CREATE TABLE IF NOT EXISTS record_categories (
+  record_id TEXT NOT NULL,
+  category_id INTEGER NOT NULL,
+  PRIMARY KEY (record_id, category_id),
+  FOREIGN KEY (record_id) REFERENCES daftare_andicator(Shomare_Radif) ON DELETE CASCADE,
+  FOREIGN KEY (category_id) REFERENCES categories(id) ON DELETE CASCADE
+);
+
+
         ''');
       },
     );
@@ -144,21 +157,21 @@ class DatabaseHelper {
   }
 
   static Future<List<Map<String, dynamic>>> getPaged({
-  required int limit,
-  required int offset,
-  String? search,
-  required String? fromDate,
-  required String? toDate,
-  required String? onvan,
-}) async {
-  final db = await database;
+    required int limit,
+    required int offset,
+    String? search,
+    required String? fromDate,
+    required String? toDate,
+    required String? onvan,
+  }) async {
+    final db = await database;
 
-  List<String> conditions = [];
-  List<Object?> args = [];
+    List<String> conditions = [];
+    List<Object?> args = [];
 
-  // 🔍 سرچ عمومی
-  if (search != null && search.isNotEmpty) {
-    conditions.add('''
+    // 🔍 سرچ عمومی
+    if (search != null && search.isNotEmpty) {
+      conditions.add('''
       (
         guy LIKE ? 
         OR saheb_name LIKE ?
@@ -167,49 +180,43 @@ class DatabaseHelper {
       )
     ''');
 
-    args.addAll([
-      '%$search%',
-      '%$search%',
-      '%$search%',
-      '%$search%',
-    ]);
-  }
+      args.addAll(['%$search%', '%$search%', '%$search%', '%$search%']);
+    }
 
-  // 🏷 فیلتر عنوان
-  if (onvan != null && onvan.isNotEmpty) {
-    conditions.add('onvan LIKE ?');
-    args.add('%$onvan%');
-  }
+    // 🏷 فیلتر عنوان
+    if (onvan != null && onvan.isNotEmpty) {
+      conditions.add('onvan LIKE ?');
+      args.add('%$onvan%');
+    }
 
-  // 📅 فیلتر از تاریخ
-  if (fromDate != null && fromDate.isNotEmpty) {
-    conditions.add('date >= ?');
-    args.add(fromDate);
-  }
+    // 📅 فیلتر از تاریخ
+    if (fromDate != null && fromDate.isNotEmpty) {
+      conditions.add('date >= ?');
+      args.add(fromDate);
+    }
 
-  // 📅 فیلتر تا تاریخ
-  if (toDate != null && toDate.isNotEmpty) {
-    conditions.add('date <= ?');
-    args.add(toDate);
-  }
+    // 📅 فیلتر تا تاریخ
+    if (toDate != null && toDate.isNotEmpty) {
+      conditions.add('date <= ?');
+      args.add(toDate);
+    }
 
-  // ساخت WHERE داینامیک
-  String whereClause = '';
-  if (conditions.isNotEmpty) {
-    whereClause = 'WHERE ${conditions.join(' AND ')}';
-  }
+    // ساخت WHERE داینامیک
+    String whereClause = '';
+    if (conditions.isNotEmpty) {
+      whereClause = 'WHERE ${conditions.join(' AND ')}';
+    }
 
-  return await db.rawQuery(
-    '''
+    return await db.rawQuery(
+      '''
     SELECT * FROM daftare_andicator
     $whereClause
     ORDER BY Shomare_Radif DESC
     LIMIT ? OFFSET ?
     ''',
-    [...args, limit, offset],
-  );
-}
-
+      [...args, limit, offset],
+    );
+  }
 
   // CRUD
   static Future<int> insert(Map<String, dynamic> data) async {
@@ -242,6 +249,63 @@ class DatabaseHelper {
       return result.first['maxRadif'] as int?;
     }
     return null;
+  }
+
+  static Future<List<String>> searchCategories(String query) async {
+    final db = await database;
+    final res = await db.rawQuery(
+      "SELECT name FROM categories WHERE name LIKE ? LIMIT 10",
+      ['%$query%'],
+    );
+    return res.map((e) => e['name'] as String).toList();
+  }
+
+  static Future<void> saveCategoriesForRecord(
+    String recordId,
+    List<String> categories,
+  ) async {
+    final db = await database;
+
+    await db.delete(
+      'record_categories',
+      where: 'record_id = ?',
+      whereArgs: [recordId],
+    );
+
+    for (final cat in categories) {
+      await db.insert('categories', {
+        'name': cat,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+      final idRes = await db.query(
+        'categories',
+        where: 'name = ?',
+        whereArgs: [cat],
+      );
+
+      final catId = idRes.first['id'];
+
+      await db.insert('record_categories', {
+        'record_id': recordId,
+        'category_id': catId,
+      }, conflictAlgorithm: ConflictAlgorithm.ignore);
+    }
+  }
+
+  static Future<List<String>> getCategoriesForRecord(String recordId) async {
+    final db = await database;
+
+    final res = await db.rawQuery(
+      '''
+    SELECT c.name
+    FROM categories c
+    JOIN record_categories rc ON rc.category_id = c.id
+    WHERE rc.record_id = ?
+  ''',
+      [recordId],
+    );
+
+    return res.map((e) => e['name'] as String).toList();
   }
 
   static Future<void> closeDb() async {

@@ -37,6 +37,13 @@ class _RecordFormState extends State<RecordForm>
   Timer? _debounce;
   final FocusNode _firstFieldFocus = FocusNode();
 
+  //دسته بندی
+  List<String> selectedCategories = [];
+  List<String> categorySuggestions = [];
+  Timer? _debounceCategory;
+  final TextEditingController categoryController = TextEditingController();
+  final FocusNode categoryFocus = FocusNode();
+
   final mainFields = [
     'Shomare_Radif',
     'date',
@@ -88,7 +95,18 @@ class _RecordFormState extends State<RecordForm>
       _setInitialValues();
     } else {
       _loadFiles(); // بارگذاری فایل‌ها
+      _loadCategories();
     }
+  }
+
+  Future<void> _loadCategories() async {
+    final recordId = widget.record!['Shomare_Radif'].toString();
+
+    final cats = await DatabaseHelper.getCategoriesForRecord(recordId);
+
+    setState(() {
+      selectedCategories = cats;
+    });
   }
 
   void _setInitialValues() {
@@ -132,6 +150,11 @@ class _RecordFormState extends State<RecordForm>
     } else {
       await DatabaseHelper.update(widget.record!['Shomare_Radif'], data);
     }
+
+    await DatabaseHelper.saveCategoriesForRecord(
+      c['Shomare_Radif']!.text,
+      selectedCategories,
+    );
 
     Navigator.pop(context, true);
   }
@@ -375,6 +398,101 @@ class _RecordFormState extends State<RecordForm>
     );
   }
 
+  //ویدجت دسته بندی
+  Widget buildCategoryField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextFormField(
+          controller: categoryController,
+          focusNode: categoryFocus,
+          decoration: InputDecoration(
+            labelText: "دسته‌بندی",
+            border: OutlineInputBorder(),
+          ),
+          onChanged: (value) {
+            _debounceCategory?.cancel();
+            _debounceCategory = Timer(
+              const Duration(milliseconds: 300),
+              () async {
+                if (value.trim().isEmpty) {
+                  setState(() => categorySuggestions.clear());
+                  return;
+                }
+
+                final res = await DatabaseHelper.searchCategories(value.trim());
+                setState(() => categorySuggestions = res);
+              },
+            );
+          },
+          onFieldSubmitted: (value) {
+            _addCategory(value.trim());
+          },
+        ),
+
+        /// 🔹 نمایش تگ‌های انتخاب شده
+        if (selectedCategories.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: selectedCategories.map((cat) {
+                return Chip(
+                  label: Text(cat),
+                  deleteIcon: Icon(Icons.close, size: 18),
+                  onDeleted: () {
+                    setState(() {
+                      selectedCategories.remove(cat);
+                    });
+                  },
+                );
+              }).toList(),
+            ),
+          ),
+
+        /// 🔹 پیشنهادها
+        if (categorySuggestions.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+              color: Colors.white,
+            ),
+            child: ListView.builder(
+              shrinkWrap: true,
+              physics: NeverScrollableScrollPhysics(),
+              itemCount: categorySuggestions.length,
+              itemBuilder: (_, i) {
+                final item = categorySuggestions[i];
+                return ListTile(
+                  dense: true,
+                  title: Text(item, textDirection: TextDirection.rtl),
+                  onTap: () {
+                    _addCategory(item);
+                  },
+                );
+              },
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _addCategory(String value) {
+    if (value.isEmpty) return;
+
+    if (!selectedCategories.contains(value)) {
+      setState(() {
+        selectedCategories.add(value);
+      });
+    }
+
+    categoryController.clear();
+    categorySuggestions.clear();
+  }
+
   /// 🔹 فیلد مخصوص صاحب نامه با اتوکامپلیت
   Widget buildSahebNameField() {
     return Column(
@@ -583,6 +701,11 @@ class _RecordFormState extends State<RecordForm>
               padding: EdgeInsets.all(12),
               children: [
                 ...mainFields.map((field) => buildTextField(field)),
+
+                const SizedBox(height: 10),
+                buildCategoryField(),
+                const SizedBox(height: 10),
+
                 ExpansionTile(
                   title: Text('سایر اطلاعات'),
                   children: otherFields.map(buildTextField).toList(),
@@ -743,6 +866,11 @@ class _RecordFormState extends State<RecordForm>
     } else {
       await DatabaseHelper.update(widget.record!['Shomare_Radif'], data);
     }
+
+    await DatabaseHelper.saveCategoriesForRecord(
+      c['Shomare_Radif']!.text,
+      selectedCategories,
+    );
 
     // 🔹 تاریخ رکورد فعلی را نگه می‌داریم
     final String lastDate = c['date']?.text ?? '';
