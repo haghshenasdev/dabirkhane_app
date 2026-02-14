@@ -37,6 +37,7 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController fromDateController = TextEditingController();
   final TextEditingController toDateController = TextEditingController();
   final TextEditingController onvanController = TextEditingController();
+  final TextEditingController _controller = TextEditingController();
 
   Future<void> loadMore({bool reset = false}) async {
     if (isLoading) return;
@@ -316,10 +317,22 @@ class _HomePageState extends State<HomePage> {
                     // 🔎 فیلد جستجو
                     Expanded(
                       child: TextField(
-                        decoration: const InputDecoration(
+                        controller: _controller,
+                        decoration: InputDecoration(
                           labelText: 'جستجو...',
-                          prefixIcon: Icon(Icons.search),
-                          border: OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.search),
+                          border: const OutlineInputBorder(),
+                          // وقتی متن نوشته شده دکمه پاک‌کن نمایش داده می‌شود
+                          suffixIcon: _controller.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    _controller.clear();
+                                    query = '';
+                                    loadMore(reset: true);
+                                  },
+                                )
+                              : null,
                         ),
                         onChanged: (v) {
                           if (_debounce?.isActive ?? false) _debounce!.cancel();

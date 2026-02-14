@@ -336,25 +336,39 @@ class _RecordFormState extends State<RecordForm>
               borderRadius: BorderRadius.circular(8),
               color: Colors.white,
             ),
-            child: ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: suggestions.length,
-              itemBuilder: (_, i) {
-                final item = suggestions[i];
-                return ListTile(
-                  dense: true,
-                  title: Text(item, textDirection: TextDirection.rtl),
-                  onTap: () {
-                    onSelected(item);
-                    if (nextFocus != null) {
-                      FocusScope.of(context).requestFocus(nextFocus);
-                    } else {
-                      focusNode.unfocus();
-                    }
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: IconButton(
+                    icon: Icon(Icons.close, size: 20, color: Colors.grey),
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints(),
+                    onPressed: () {
+                      setState(() {
+                        suggestions.clear();
+                      });
+                    },
+                  ),
+                ),
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: suggestions.length,
+                  itemBuilder: (_, i) {
+                    final item = suggestions[i];
+                    return ListTile(
+                      dense: true,
+                      title: Text(item, textDirection: TextDirection.rtl),
+                      onTap: () {
+                        onSelected(item);
+                        setState(() => suggestions.clear());
+                      },
+                    );
                   },
-                );
-              },
+                ),
+              ],
             ),
           ),
       ],
@@ -394,41 +408,58 @@ class _RecordFormState extends State<RecordForm>
               borderRadius: BorderRadius.circular(8),
               color: Colors.white,
             ),
-            child: ListView.builder(
-              shrinkWrap: true,
-              physics: NeverScrollableScrollPhysics(),
-              itemCount: sahebSuggestions.length,
-              itemBuilder: (_, i) {
-                final item = sahebSuggestions[i];
-                return ListTile(
-                  dense: true,
-                  title: Text(item, textDirection: TextDirection.rtl),
-                  onTap: () async {
-                    c['saheb_name']!.text = item;
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Align(
+                  alignment: Alignment.topRight,
+                  child: IconButton(
+                    icon: Icon(Icons.close, size: 20, color: Colors.grey),
+                    padding: EdgeInsets.zero,
+                    constraints: BoxConstraints(),
+                    onPressed: () {
+                      setState(() {
+                        sahebSuggestions.clear();
+                      });
+                    },
+                  ),
+                ),
+                ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: sahebSuggestions.length,
+                  itemBuilder: (_, i) {
+                    final item = sahebSuggestions[i];
+                    return ListTile(
+                      dense: true,
+                      title: Text(item, textDirection: TextDirection.rtl),
+                      onTap: () async {
+                        c['saheb_name']!.text = item;
 
-                    final last = await DatabaseHelper.getLastRecordBySahebName(
-                      item,
+                        final last =
+                            await DatabaseHelper.getLastRecordBySahebName(item);
+
+                        if (last != null) {
+                          c['sh_name_reside']!.text =
+                              last['sh_name_reside']?.toString() ?? '';
+
+                          lastRecord = last;
+
+                          lastInfoText =
+                              'آخرین نامه: ${last['date'] ?? '—'} | ${last['guy'] ?? '—'} | ${last['onvan'] ?? '—'}';
+                        } else {
+                          lastRecord = null;
+                          lastInfoText = null;
+                        }
+
+                        setState(() {
+                          sahebSuggestions.clear();
+                        });
+                      },
                     );
-
-                    if (last != null) {
-                      c['sh_name_reside']!.text =
-                          last['sh_name_reside']?.toString() ?? '';
-
-                      lastRecord = last;
-
-                      lastInfoText =
-                          'آخرین نامه: ${last['date'] ?? '—'} | ${last['guy'] ?? '—'} | ${last['onvan'] ?? '—'}';
-                    } else {
-                      lastRecord = null;
-                      lastInfoText = null;
-                    }
-
-                    setState(() {
-                      sahebSuggestions.clear();
-                    });
                   },
-                );
-              },
+                ),
+              ],
             ),
           ),
         if (lastInfoText != null && lastRecord != null)
@@ -558,17 +589,18 @@ class _RecordFormState extends State<RecordForm>
                 ),
                 Row(
                   children: [
-                    Expanded(
-                      child: ElevatedButton(
-                        onPressed: saveAndStay,
-                        child: const Text('ذخیره و جدید'),
+                    if (widget.record == null)
+                      Expanded(
+                        child: ElevatedButton(
+                          onPressed: saveAndStay,
+                          child: const Text('ذخیره و جدید'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(width: 10),
+                    if (widget.record == null) const SizedBox(width: 10),
                     Expanded(
                       child: ElevatedButton(
                         onPressed: save,
-                        child: const Text('ذخیره و خروج'),
+                        child: const Text('ذخیره'),
                       ),
                     ),
                   ],
