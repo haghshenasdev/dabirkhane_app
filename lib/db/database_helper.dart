@@ -163,6 +163,7 @@ CREATE TABLE IF NOT EXISTS record_categories (
     required String? fromDate,
     required String? toDate,
     required String? onvan,
+    List<String>? categories,
   }) async {
     final db = await database;
 
@@ -199,6 +200,27 @@ CREATE TABLE IF NOT EXISTS record_categories (
     if (toDate != null && toDate.isNotEmpty) {
       conditions.add('date <= ?');
       args.add(toDate);
+    }
+
+    if (categories != null && categories.isNotEmpty) {
+      final placeholders = List.generate(
+        categories.length,
+        (_) => '?',
+      ).join(',');
+
+      conditions.add('''
+    Shomare_Radif IN (
+      SELECT rc.record_id
+      FROM record_categories rc
+      JOIN categories c ON c.id = rc.category_id
+      WHERE c.name IN ($placeholders)
+      GROUP BY rc.record_id
+      HAVING COUNT(DISTINCT c.name) = ?
+    )
+  ''');
+
+      args.addAll(categories);
+      args.add(categories.length); // برای اینکه همه دسته‌ها را داشته باشد
     }
 
     // ساخت WHERE داینامیک

@@ -39,6 +39,12 @@ class _HomePageState extends State<HomePage> {
   final TextEditingController onvanController = TextEditingController();
   final TextEditingController _controller = TextEditingController();
 
+  final TextEditingController categoryFilterController =
+      TextEditingController();
+  List<String> selectedCategoryFilters = [];
+  List<String> categoryFilterSuggestions = [];
+  Timer? _debounceCategoryFilter;
+
   Future<void> loadMore({bool reset = false}) async {
     if (isLoading) return;
 
@@ -55,6 +61,7 @@ class _HomePageState extends State<HomePage> {
     final fromDate = fromDateController.text.trim();
     final toDate = toDateController.text.trim();
     final onvan = onvanController.text.trim();
+    final selectedCategories = selectedCategoryFilters;
 
     final data = await DatabaseHelper.getPaged(
       limit: limit,
@@ -63,6 +70,7 @@ class _HomePageState extends State<HomePage> {
       fromDate: fromDate,
       toDate: toDate,
       onvan: onvan,
+      categories: selectedCategories,
     );
 
     if (data.length < limit) {
@@ -424,6 +432,103 @@ class _HomePageState extends State<HomePage> {
                         ),
                         const SizedBox(height: 10),
 
+                        /// 🔹 فیلتر دسته‌بندی
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            TextField(
+                              controller: categoryFilterController,
+                              decoration: const InputDecoration(
+                                labelText: 'دسته‌بندی',
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (value) {
+                                _debounceCategoryFilter?.cancel();
+                                _debounceCategoryFilter = Timer(
+                                  const Duration(milliseconds: 300),
+                                  () async {
+                                    if (value.trim().isEmpty) {
+                                      setState(
+                                        () => categoryFilterSuggestions.clear(),
+                                      );
+                                      return;
+                                    }
+
+                                    final res =
+                                        await DatabaseHelper.searchCategories(
+                                          value.trim(),
+                                        );
+
+                                    setState(
+                                      () => categoryFilterSuggestions = res,
+                                    );
+                                  },
+                                );
+                              },
+                              onSubmitted: (value) {
+                                _addCategoryFilter(value.trim());
+                              },
+                            ),
+
+                            /// نمایش چیپ‌ها
+                            if (selectedCategoryFilters.isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 8),
+                                child: Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: selectedCategoryFilters.map((cat) {
+                                    return Chip(
+                                      label: Text(cat),
+                                      deleteIcon: const Icon(
+                                        Icons.close,
+                                        size: 18,
+                                      ),
+                                      onDeleted: () {
+                                        setState(() {
+                                          selectedCategoryFilters.remove(cat);
+                                        });
+                                      },
+                                    );
+                                  }).toList(),
+                                ),
+                              ),
+
+                            /// پیشنهادها
+                            if (categoryFilterSuggestions.isNotEmpty)
+                              Container(
+                                margin: const EdgeInsets.only(top: 4),
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                    color: Colors.grey.shade300,
+                                  ),
+                                  borderRadius: BorderRadius.circular(8),
+                                  color: Colors.white,
+                                ),
+                                child: ListView.builder(
+                                  shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+                                  itemCount: categoryFilterSuggestions.length,
+                                  itemBuilder: (_, i) {
+                                    final item = categoryFilterSuggestions[i];
+                                    return ListTile(
+                                      dense: true,
+                                      title: Text(
+                                        item,
+                                        textDirection: TextDirection.rtl,
+                                      ),
+                                      onTap: () {
+                                        _addCategoryFilter(item);
+                                      },
+                                    );
+                                  },
+                                ),
+                              ),
+                          ],
+                        ),
+
+                        const SizedBox(height: 10),
+
                         Row(
                           children: [
                             ElevatedButton.icon(
@@ -440,6 +545,8 @@ class _HomePageState extends State<HomePage> {
                                 fromDateController.clear();
                                 toDateController.clear();
                                 onvanController.clear();
+                                selectedCategoryFilters.clear();
+                                categoryFilterController.clear();
                                 loadMore(reset: true);
                               },
                             ),
@@ -767,5 +874,18 @@ class _HomePageState extends State<HomePage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text('✅ خروجی ذخیره شد: ${path.path}')));
+  }
+
+  void _addCategoryFilter(String value) {
+    if (value.isEmpty) return;
+
+    if (!selectedCategoryFilters.contains(value)) {
+      setState(() {
+        selectedCategoryFilters.add(value);
+      });
+    }
+
+    categoryFilterController.clear();
+    categoryFilterSuggestions.clear();
   }
 }
