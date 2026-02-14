@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:dabirkhane_app/db/database_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:fl_chart/fl_chart.dart';
@@ -19,6 +21,8 @@ class _StatsPageState extends State<StatsPage> {
 
   Map<int, int> monthlyCounts = {};
   Map<String, int> receiverCounts = {};
+  Map<String, int> subjectCounts = {};
+  Map<String, int> ownerCounts = {};
 
   final List<String> monthNames = [
     'فروردین',
@@ -59,6 +63,11 @@ class _StatsPageState extends State<StatsPage> {
     }
 
     await loadStats();
+  }
+
+  List<Color> _generateMaterialColors(int count) {
+    final colors = Colors.primaries.toList()..shuffle();
+    return colors.take(count).map((c) => c.shade500).toList();
   }
 
   Future<void> loadStats() async {
@@ -137,18 +146,65 @@ class _StatsPageState extends State<StatsPage> {
       }
     }
 
+    // بیشترین موضوع‌ها
+    final subjectData = await db.rawQuery(
+      """
+  SELECT guy, COUNT(*) as count
+  FROM daftare_andicator
+  WHERE substr(date,1,4) = ?
+  GROUP BY guy
+  HAVING count > 1
+  ORDER BY count DESC
+  LIMIT 6
+  """,
+      [selectedYear.toString()],
+    );
+
+    subjectCounts.clear();
+    for (var row in subjectData) {
+      final guy = row['guy']?.toString() ?? '';
+      if (guy.isNotEmpty) {
+        subjectCounts[guy] = row['count'] as int;
+      }
+    }
+
+    // بیشترین صاحب‌ها
+    final ownerData = await db.rawQuery(
+      """
+  SELECT saheb_name, COUNT(*) as count
+  FROM daftare_andicator
+  WHERE substr(date,1,4) = ?
+  GROUP BY saheb_name
+  HAVING count > 1
+  ORDER BY count DESC
+  LIMIT 6
+  """,
+      [selectedYear.toString()],
+    );
+
+    ownerCounts.clear();
+    for (var row in ownerData) {
+      final saheb_name = row['saheb_name']?.toString() ?? '';
+      if (saheb_name.isNotEmpty) {
+        ownerCounts[saheb_name] = row['count'] as int;
+      }
+    }
+
     setState(() {});
   }
 
   @override
   Widget build(BuildContext context) {
+    final receiverColors = _generateMaterialColors(receiverCounts.length);
+    final subjectColors = _generateMaterialColors(subjectCounts.length);
+
     return Scaffold(
       appBar: AppBar(title: const Text("آمار نامه‌ها")),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            // کارت آمار کلی
+            /// کارت‌های آمار
             Row(
               children: [
                 _infoCard("کل نامه‌ها", totalLetters.toString()),
@@ -159,7 +215,7 @@ class _StatsPageState extends State<StatsPage> {
 
             const SizedBox(height: 20),
 
-            // انتخاب سال
+            /// انتخاب سال
             DropdownButton<int>(
               value: selectedYear,
               items: years
@@ -176,7 +232,7 @@ class _StatsPageState extends State<StatsPage> {
 
             const SizedBox(height: 30),
 
-            // نمودار ماهانه
+            /// نمودار ماهانه
             const Align(
               alignment: Alignment.centerRight,
               child: Text(
@@ -230,11 +286,119 @@ class _StatsPageState extends State<StatsPage> {
 
             const SizedBox(height: 40),
 
-            // نمودار گیرنده‌ها
+            /// ===== دو نمودار دایره‌ای ریسپانسیو =====
+            LayoutBuilder(
+              builder: (context, constraints) {
+                bool isWide = constraints.maxWidth > 700;
+
+                double chartWidth = isWide
+                    ? (constraints.maxWidth - 20) / 2
+                    : constraints.maxWidth;
+
+                return Wrap(
+                  spacing: 20,
+                  runSpacing: 20,
+                  children: [
+                    /// گیرنده‌ها
+                    SizedBox(
+                      width: chartWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "بیشترین گیرنده‌ها",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            height: 300,
+                            child: PieChart(
+                              PieChartData(
+                                sections: List.generate(receiverCounts.length, (
+                                  index,
+                                ) {
+                                  final entry = receiverCounts.entries
+                                      .elementAt(index);
+                                  return PieChartSectionData(
+                                    value: entry.value.toDouble(),
+                                    title: "${entry.key}\n${entry.value}",
+                                    radius: 90,
+                                    color:
+                                        receiverColors[index %
+                                            receiverColors.length],
+                                    titleStyle: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    /// موضوع‌ها
+                    SizedBox(
+                      width: chartWidth,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            "بیشترین موضوع‌ها",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            height: 300,
+                            child: PieChart(
+                              PieChartData(
+                                sections: List.generate(subjectCounts.length, (
+                                  index,
+                                ) {
+                                  final entry = subjectCounts.entries.elementAt(
+                                    index,
+                                  );
+                                  return PieChartSectionData(
+                                    value: entry.value.toDouble(),
+                                    title: "${entry.key}\n${entry.value}",
+                                    radius: 90,
+                                    color:
+                                        subjectColors[index %
+                                            subjectColors.length],
+                                    titleStyle: const TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.bold,
+                                      color: Colors.white,
+                                    ),
+                                  );
+                                }),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+
+            const SizedBox(height: 40),
+
+            /// نمودار بیشترین صاحب‌ها
             const Align(
               alignment: Alignment.centerRight,
               child: Text(
-                "بیشترین گیرنده‌ها",
+                "بیشترین صاحب‌ها در سال انتخاب شده",
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
               ),
             ),
@@ -243,15 +407,41 @@ class _StatsPageState extends State<StatsPage> {
 
             SizedBox(
               height: 300,
-              child: PieChart(
-                PieChartData(
-                  sections: receiverCounts.entries.map((e) {
-                    return PieChartSectionData(
-                      value: e.value.toDouble(),
-                      title: "${e.key}\n${e.value}",
-                      radius: 80,
+              child: BarChart(
+                BarChartData(
+                  borderData: FlBorderData(show: false),
+                  gridData: FlGridData(show: true),
+                  titlesData: FlTitlesData(
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          int index = value.toInt();
+                          if (index >= 0 && index < ownerCounts.length) {
+                            return Text(
+                              ownerCounts.keys.elementAt(index),
+                              style: const TextStyle(fontSize: 10),
+                            );
+                          }
+                          return const SizedBox();
+                        },
+                      ),
+                    ),
+                  ),
+                  barGroups: List.generate(ownerCounts.length, (index) {
+                    final value = ownerCounts.values.elementAt(index);
+
+                    return BarChartGroupData(
+                      x: index,
+                      barRods: [
+                        BarChartRodData(
+                          toY: value.toDouble(),
+                          width: 14,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ],
                     );
-                  }).toList(),
+                  }),
                 ),
               ),
             ),
