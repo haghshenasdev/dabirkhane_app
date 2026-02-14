@@ -144,35 +144,72 @@ class DatabaseHelper {
   }
 
   static Future<List<Map<String, dynamic>>> getPaged({
-    required int limit,
-    required int offset,
-    String? search,
-  }) async {
-    final db = await database;
+  required int limit,
+  required int offset,
+  String? search,
+  required String? fromDate,
+  required String? toDate,
+  required String? onvan,
+}) async {
+  final db = await database;
 
-    String where = '';
-    List<Object?> args = [];
+  List<String> conditions = [];
+  List<Object?> args = [];
 
-    if (search != null && search.isNotEmpty) {
-      where = '''
-      WHERE guy LIKE ? 
-         OR saheb_name LIKE ?
-         OR Shomare_Radif LIKE ?
-         OR sh_name_reside LIKE ?
-    ''';
-      args = ['%$search%', '%$search%', '%$search%', '%$search%'];
-    }
+  // 🔍 سرچ عمومی
+  if (search != null && search.isNotEmpty) {
+    conditions.add('''
+      (
+        guy LIKE ? 
+        OR saheb_name LIKE ?
+        OR Shomare_Radif LIKE ?
+        OR sh_name_reside LIKE ?
+      )
+    ''');
 
-    return await db.rawQuery(
-      '''
+    args.addAll([
+      '%$search%',
+      '%$search%',
+      '%$search%',
+      '%$search%',
+    ]);
+  }
+
+  // 🏷 فیلتر عنوان
+  if (onvan != null && onvan.isNotEmpty) {
+    conditions.add('onvan LIKE ?');
+    args.add('%$onvan%');
+  }
+
+  // 📅 فیلتر از تاریخ
+  if (fromDate != null && fromDate.isNotEmpty) {
+    conditions.add('date >= ?');
+    args.add(fromDate);
+  }
+
+  // 📅 فیلتر تا تاریخ
+  if (toDate != null && toDate.isNotEmpty) {
+    conditions.add('date <= ?');
+    args.add(toDate);
+  }
+
+  // ساخت WHERE داینامیک
+  String whereClause = '';
+  if (conditions.isNotEmpty) {
+    whereClause = 'WHERE ${conditions.join(' AND ')}';
+  }
+
+  return await db.rawQuery(
+    '''
     SELECT * FROM daftare_andicator
-    $where
+    $whereClause
     ORDER BY Shomare_Radif DESC
     LIMIT ? OFFSET ?
-  ''',
-      [...args, limit, offset],
-    );
-  }
+    ''',
+    [...args, limit, offset],
+  );
+}
+
 
   // CRUD
   static Future<int> insert(Map<String, dynamic> data) async {

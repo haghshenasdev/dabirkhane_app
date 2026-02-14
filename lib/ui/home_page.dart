@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:dabirkhane_app/pages/settings_page.dart';
+import 'package:dabirkhane_app/pages/stats_page.dart';
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:shamsi_date/shamsi_date.dart';
@@ -35,6 +36,7 @@ class _HomePageState extends State<HomePage> {
 
   final TextEditingController fromDateController = TextEditingController();
   final TextEditingController toDateController = TextEditingController();
+  final TextEditingController onvanController = TextEditingController();
 
   Future<void> loadMore({bool reset = false}) async {
     if (isLoading) return;
@@ -49,11 +51,17 @@ class _HomePageState extends State<HomePage> {
 
     isLoading = true;
     setState(() {});
+    final fromDate = fromDateController.text.trim();
+    final toDate = toDateController.text.trim();
+    final onvan = onvanController.text.trim();
 
     final data = await DatabaseHelper.getPaged(
       limit: limit,
       offset: offset,
       search: query,
+      fromDate: fromDate,
+      toDate: toDate,
+      onvan: onvan,
     );
 
     if (data.length < limit) {
@@ -254,9 +262,10 @@ class _HomePageState extends State<HomePage> {
                 IconButton(
                   icon: const Icon(Icons.bar_chart_rounded),
                   onPressed: () {
-                    setState(() {
-                      load(); // یا load();
-                    });
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const StatsPage()),
+                    );
                   },
                   tooltip: 'آمار',
                 ),
@@ -389,6 +398,21 @@ class _HomePageState extends State<HomePage> {
 
                         Row(
                           children: [
+                            Expanded(
+                              child: TextField(
+                                controller: onvanController,
+                                decoration: const InputDecoration(
+                                  labelText: 'گیرنده نامه',
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 10),
+
+                        Row(
+                          children: [
                             ElevatedButton.icon(
                               icon: const Icon(Icons.search),
                               label: const Text('اعمال فیلتر'),
@@ -402,6 +426,7 @@ class _HomePageState extends State<HomePage> {
                               onPressed: () {
                                 fromDateController.clear();
                                 toDateController.clear();
+                                onvanController.clear();
                                 loadMore(reset: true);
                               },
                             ),

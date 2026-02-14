@@ -47,6 +47,8 @@ dependencies:
   url_launcher: ^6.1.10
   excel: ^4.0.2
   file_selector: ^1.0.3
+  fl_chart: ^0.68.0
+
 
 dev_dependencies:
   flutter_test:
