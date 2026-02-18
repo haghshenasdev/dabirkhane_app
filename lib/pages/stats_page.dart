@@ -23,6 +23,7 @@ class _StatsPageState extends State<StatsPage> {
   Map<String, int> receiverCounts = {};
   Map<String, int> subjectCounts = {};
   Map<String, int> ownerCounts = {};
+  Map<String, int> categoryCounts = {};
 
   final List<String> monthNames = [
     'فروردین',
@@ -127,20 +128,20 @@ class _StatsPageState extends State<StatsPage> {
     // بیشترین گیرنده‌ها (حذف کم‌تعدادها)
     final receiverData = await db.rawQuery(
       """
-    SELECT onvan, COUNT(*) as count
-    FROM daftare_andicator
-    WHERE substr(date,1,4) = ?
-    GROUP BY onvan
-    HAVING count > 2
-    ORDER BY count DESC
-    LIMIT 6
+    SELECT TRIM(onvan) as onvan_clean, COUNT(*) as count
+FROM daftare_andicator
+WHERE substr(date,1,4) = ?
+GROUP BY onvan_clean
+HAVING count > 2
+ORDER BY count DESC
+LIMIT 6
   """,
       [selectedYear.toString()],
     );
 
     receiverCounts.clear();
     for (var row in receiverData) {
-      final onvan = row['onvan']?.toString() ?? '';
+      final onvan = row['onvan_clean']?.toString() ?? '';
       if (onvan.isNotEmpty) {
         receiverCounts[onvan] = row['count'] as int;
       }
@@ -149,20 +150,21 @@ class _StatsPageState extends State<StatsPage> {
     // بیشترین موضوع‌ها
     final subjectData = await db.rawQuery(
       """
-  SELECT guy, COUNT(*) as count
-  FROM daftare_andicator
-  WHERE substr(date,1,4) = ?
-  GROUP BY guy
-  HAVING count > 1
-  ORDER BY count DESC
-  LIMIT 6
+SELECT TRIM(guy) as guy_clean, COUNT(*) as count
+FROM daftare_andicator
+WHERE substr(date,1,4) = ?
+GROUP BY guy_clean
+HAVING count > 1
+ORDER BY count DESC
+LIMIT 6
+
   """,
       [selectedYear.toString()],
     );
 
     subjectCounts.clear();
     for (var row in subjectData) {
-      final guy = row['guy']?.toString() ?? '';
+      final guy = row['guy_clean']?.toString() ?? '';
       if (guy.isNotEmpty) {
         subjectCounts[guy] = row['count'] as int;
       }
@@ -171,22 +173,46 @@ class _StatsPageState extends State<StatsPage> {
     // بیشترین صاحب‌ها
     final ownerData = await db.rawQuery(
       """
-  SELECT saheb_name, COUNT(*) as count
-  FROM daftare_andicator
-  WHERE substr(date,1,4) = ?
-  GROUP BY saheb_name
-  HAVING count > 1
-  ORDER BY count DESC
-  LIMIT 6
+SELECT TRIM(saheb_name) as saheb_clean, COUNT(*) as count
+FROM daftare_andicator
+WHERE substr(date,1,4) = ?
+GROUP BY saheb_clean
+HAVING count > 1
+ORDER BY count DESC
+LIMIT 6
   """,
       [selectedYear.toString()],
     );
 
     ownerCounts.clear();
     for (var row in ownerData) {
-      final saheb_name = row['saheb_name']?.toString() ?? '';
-      if (saheb_name.isNotEmpty) {
-        ownerCounts[saheb_name] = row['count'] as int;
+      final saheb = row['saheb_clean']?.toString() ?? '';
+      if (saheb.isNotEmpty) {
+        ownerCounts[saheb] = row['count'] as int;
+      }
+    }
+
+    // آمار دسته‌بندی‌ها
+    final categoryData = await db.rawQuery(
+      """
+  SELECT TRIM(c.name) as cat_name, COUNT(*) as count
+  FROM record_categories rc
+  JOIN categories c ON c.id = rc.category_id
+  JOIN daftare_andicator d ON d.Shomare_Radif = rc.record_id
+  WHERE substr(d.date,1,4) = ?
+  GROUP BY cat_name
+  HAVING count > 0
+  ORDER BY count DESC
+  LIMIT 6
+  """,
+      [selectedYear.toString()],
+    );
+
+    categoryCounts.clear();
+    for (var row in categoryData) {
+      final cat = row['cat_name']?.toString() ?? '';
+      if (cat.isNotEmpty) {
+        categoryCounts[cat] = row['count'] as int;
       }
     }
 
@@ -197,6 +223,7 @@ class _StatsPageState extends State<StatsPage> {
   Widget build(BuildContext context) {
     final receiverColors = _generateMaterialColors(receiverCounts.length);
     final subjectColors = _generateMaterialColors(subjectCounts.length);
+    final categoryColors = _generateMaterialColors(categoryCounts.length);
 
     return Scaffold(
       appBar: AppBar(title: const Text("آمار نامه‌ها")),
@@ -382,6 +409,52 @@ class _StatsPageState extends State<StatsPage> {
                                   );
                                 }),
                               ),
+                            ),
+                          ),
+                          
+                          // دسته بندی ها
+                          SizedBox(
+                            width: chartWidth,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  "بیشترین دسته‌بندی‌ها",
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                SizedBox(
+                                  height: 300,
+                                  child: PieChart(
+                                    PieChartData(
+                                      sections: List.generate(
+                                        categoryCounts.length,
+                                        (index) {
+                                          final entry = categoryCounts.entries
+                                              .elementAt(index);
+                                          return PieChartSectionData(
+                                            value: entry.value.toDouble(),
+                                            title:
+                                                "${entry.key}\n${entry.value}",
+                                            radius: 90,
+                                            color:
+                                                categoryColors[index %
+                                                    categoryColors.length],
+                                            titleStyle: const TextStyle(
+                                              fontSize: 12,
+                                              fontWeight: FontWeight.bold,
+                                              color: Colors.white,
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
