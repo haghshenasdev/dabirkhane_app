@@ -7,7 +7,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_doc_scanner/flutter_doc_scanner.dart';
 import 'package:open_file/open_file.dart';
-import 'package:path_provider/path_provider.dart';
 import '../db/database_helper.dart';
 import 'package:shamsi_date/shamsi_date.dart';
 import 'package:path/path.dart' as path;
