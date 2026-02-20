@@ -123,18 +123,60 @@ class _RecordFormState extends State<RecordForm>
 
   // بارگذاری فایل‌ها از پوشه 'letters'
   Future<void> _loadFiles() async {
-    final shomareRadif = c['Shomare_Radif']!.text; // گرفتن Shomare_Radif
-    final lettersDir = await getLettersDirectory();
-    if (await lettersDir.exists()) {
-      final files = lettersDir.listSync();
+    final shomareRadifRaw = c['Shomare_Radif']?.text ?? '';
+    final shomareRadif = normalizeNumbers(shomareRadifRaw.trim());
+
+    if (shomareRadif.isEmpty) {
       setState(() {
-        filesInDirectory = files.whereType<File>().where((f) {
-          final name = path.basenameWithoutExtension(f.path);
-          final regex = RegExp('^$shomareRadif(\\D.*)?\$');
-          return regex.hasMatch(name);
-        }).toList();
+        filesInDirectory = [];
       });
+      return;
     }
+
+    final lettersDir = await getLettersDirectory();
+
+    if (!await lettersDir.exists()) {
+      setState(() {
+        filesInDirectory = [];
+      });
+      return;
+    }
+
+    final regex = RegExp('^$shomareRadif((\\D+\\d+)|\\d+)?\$');
+
+    final List<File> matchedFiles = [];
+
+    try {
+      await for (final entity in lettersDir.list(
+        recursive: true,
+        followLinks: false,
+      )) {
+        if (entity is File) {
+          final nameRaw = path.basenameWithoutExtension(entity.path);
+          final name = normalizeNumbers(nameRaw);
+
+          if (regex.hasMatch(name)) {
+            matchedFiles.add(entity);
+          }
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          filesInDirectory = matchedFiles;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error while loading files: $e');
+    }
+  }
+
+  String normalizeNumbers(String input) {
+    const persianDigits = ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'];
+    for (int i = 0; i < persianDigits.length; i++) {
+      input = input.replaceAll(persianDigits[i], i.toString());
+    }
+    return input;
   }
 
   Future<void> save() async {
@@ -184,16 +226,21 @@ class _RecordFormState extends State<RecordForm>
     _debounce?.cancel();
     _debounceGuy?.cancel();
     _debounceOnvan?.cancel();
+    _debounceCategory?.cancel();
 
     for (var controller in c.values) {
       controller.dispose();
     }
+
     for (var node in focusNodes.values) {
       node.dispose();
     }
 
-    _tabController.dispose();
+    categoryController.dispose();
+    categoryFocus.dispose();
     _firstFieldFocus.dispose();
+    _tabController.dispose();
+
     super.dispose();
   }
 
